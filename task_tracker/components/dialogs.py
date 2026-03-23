@@ -51,10 +51,16 @@ def show_task_dialog(
                 label="Priority",
             ).classes("flex-1").props('dark')
 
-        due = ui.input(
-            "Due Date (YYYY-MM-DD)",
-            value=task.due_date.strftime("%Y-%m-%d") if task and task.due_date else "",
-        ).classes("w-full").props('dark')
+        with ui.row().classes("w-full gap-4"):
+            start = ui.input(
+                "Start Date (YYYY-MM-DD)",
+                value=task.start_date.strftime("%Y-%m-%d") if task and task.start_date else "",
+            ).classes("flex-1").props('dark')
+
+            due = ui.input(
+                "Due Date (YYYY-MM-DD)",
+                value=task.due_date.strftime("%Y-%m-%d") if task and task.due_date else "",
+            ).classes("flex-1").props('dark')
 
         error_label = ui.label("").style(f"color: {Colors.DANGER}; font-size: 12px")
 
@@ -73,16 +79,25 @@ def show_task_dialog(
                 s = STATUS_OPTIONS.get(status.value, TaskStatus.TODO)
                 p = PRIORITY_OPTIONS.get(priority.value, TaskPriority.MEDIUM)
 
+                start_date = None
+                start_str = start.value.strip()
+                if start_str:
+                    try:
+                        start_date = datetime.strptime(start_str, "%Y-%m-%d")
+                    except ValueError:
+                        error_label.set_text("Invalid start date format. Use YYYY-MM-DD")
+                        return
+
                 due_date = None
                 date_str = due.value.strip()
                 if date_str:
                     try:
                         due_date = datetime.strptime(date_str, "%Y-%m-%d")
                     except ValueError:
-                        error_label.set_text("Invalid date format. Use YYYY-MM-DD")
+                        error_label.set_text("Invalid due date format. Use YYYY-MM-DD")
                         return
 
-                on_save(t, d, s, p, due_date)
+                on_save(t, d, s, p, start_date, due_date)
                 dialog.close()
 
             ui.button("Save", on_click=handle_save).style(
@@ -283,6 +298,9 @@ def show_filter_dialog(on_apply: Callable):
 def show_help_dialog():
     """Show keyboard shortcuts help."""
     shortcuts = [
+        ("1", "Board view"),
+        ("2", "Inbox view"),
+        ("3", "Timeline view"),
         ("Ctrl+N", "New task"),
         ("Ctrl+Shift+N", "New project"),
         ("Ctrl+E", "Edit selected item"),
@@ -292,7 +310,6 @@ def show_help_dialog():
         ("A", "Toggle archived projects"),
         ("Tab", "Switch between projects"),
         ("?", "Show this help"),
-        ("Ctrl+Q", "Quit application"),
     ]
 
     with ui.dialog() as dialog, ui.card().classes("w-96"):

@@ -161,6 +161,27 @@ def inject_theme_css():
             overflow-y: auto;
         }}
 
+        /* Navigation items */
+        .nav-item {{
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: {Styles.RADIUS_MEDIUM}px;
+            margin: 1px 8px;
+            transition: background-color 0.15s;
+        }}
+        .nav-item:hover {{
+            background-color: {Colors.HOVER};
+        }}
+        .nav-item.selected {{
+            background-color: {Colors.SELECTED};
+        }}
+
+        .nav-divider {{
+            height: 1px;
+            background: {Colors.DIVIDER};
+            margin: 6px 16px;
+        }}
+
         .project-item {{
             padding: 10px 16px;
             cursor: pointer;

@@ -22,6 +22,13 @@ class TaskPriority(str, Enum):
     HIGH = "high"
 
 
+class ViewMode(str, Enum):
+    """View mode enumeration."""
+    KANBAN = "kanban"
+    INBOX = "inbox"
+    GANTT = "gantt"
+
+
 class Base(DeclarativeBase):
     """Base class for all models."""
     pass
@@ -68,7 +75,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(
@@ -77,11 +84,12 @@ class Task(Base):
     priority: Mapped[TaskPriority] = mapped_column(
         SQLEnum(TaskPriority), default=TaskPriority.MEDIUM
     )
+    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    project: Mapped["Project"] = relationship("Project", back_populates="tasks")
+    project: Mapped[Optional["Project"]] = relationship("Project", back_populates="tasks")
 
     @property
     def is_overdue(self) -> bool:

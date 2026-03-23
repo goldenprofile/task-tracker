@@ -5,9 +5,11 @@ from nicegui import ui, app
 from .theme import Colors, inject_theme_css
 from .state import app_state
 from .database import db_manager
-from .models import Project, Task, TaskStatus, TaskPriority
+from .models import Project, Task, TaskStatus, TaskPriority, ViewMode
 from .components.sidebar import build_sidebar
 from .components.kanban import build_kanban_board
+from .components.inbox import build_inbox_view
+from .components.gantt import build_gantt_view
 from .components.dialogs import (
     show_project_dialog,
     show_task_dialog,
@@ -50,13 +52,22 @@ def main_page():
 
     def _build_board_content(state):
         """Build board content — extracted for refresh."""
-        board = build_kanban_board(
-            on_task_edit=lambda t: _show_edit_task_dialog(t, refresh_all),
-            on_task_delete=lambda t: _show_delete_task_dialog(t, refresh_all),
-            on_add_task=lambda: _show_new_task_dialog(refresh_all),
-            on_filter=lambda: show_filter_dialog(on_apply=refresh_all),
-            on_search=lambda: show_search_dialog(on_search=lambda q: refresh_all()),
-        )
+        if app_state.current_view == ViewMode.INBOX:
+            build_inbox_view(
+                on_task_edit=lambda t: _show_edit_task_dialog(t, refresh_all),
+                on_task_delete=lambda t: _show_delete_task_dialog(t, refresh_all),
+                on_assign_project=lambda t, pid: _assign_task_to_project(t, pid, refresh_all),
+            )
+        elif app_state.current_view == ViewMode.GANTT:
+            build_gantt_view()
+        else:
+            build_kanban_board(
+                on_task_edit=lambda t: _show_edit_task_dialog(t, refresh_all),
+                on_task_delete=lambda t: _show_delete_task_dialog(t, refresh_all),
+                on_add_task=lambda: _show_new_task_dialog(refresh_all),
+                on_filter=lambda: show_filter_dialog(on_apply=refresh_all),
+                on_search=lambda: show_search_dialog(on_search=lambda q: refresh_all()),
+            )
 
     # Set up update callback
     app_state.set_update_callback(refresh_all)
@@ -107,6 +118,16 @@ def _setup_keyboard_shortcuts(state, refresh_all):
         key = e.args.get("key", "")
         ctrl = e.args.get("ctrlKey", False)
         shift = e.args.get("shiftKey", False)
+
+        if key == "1" and not ctrl:
+            app_state.switch_view(ViewMode.KANBAN)
+            return
+        elif key == "2" and not ctrl:
+            app_state.switch_view(ViewMode.INBOX)
+            return
+        elif key == "3" and not ctrl:
+            app_state.switch_view(ViewMode.GANTT)
+            return
 
         if ctrl and key.lower() == "n":
             if shift:
@@ -202,35 +223,44 @@ def _show_delete_project_dialog(project: Project, refresh_all):
 
 
 def _show_new_task_dialog(refresh_all):
-    if not app_state.current_project:
+    if not app_state.current_project and app_state.current_view != ViewMode.INBOX:
         return
 
-    def on_save(title, description, status, priority, due_date):
+    def on_save(title, description, status, priority, start_date, due_date):
+        project_id = app_state.current_project.id if app_state.current_project else None
         app_state.create_task(
-            project_id=app_state.current_project.id,
             title=title,
             description=description,
             priority=priority,
+            start_date=start_date,
             due_date=due_date,
+            project_id=project_id,
         )
         if status != TaskStatus.TODO:
             app_state.load_projects()
-            for task in app_state.current_project.tasks:
-                if task.title == title:
-                    app_state.update_task(task.id, status=status)
-                    break
+            if app_state.current_project:
+                for task in app_state.current_project.tasks:
+                    if task.title == title:
+                        app_state.update_task(task.id, status=status)
+                        break
 
     show_task_dialog(on_save=on_save)
 
 
 def _show_edit_task_dialog(task: Task, refresh_all):
-    def on_save(title, description, status, priority, due_date):
+    def on_save(title, description, status, priority, start_date, due_date):
         app_state.update_task(
             task.id, title=title, description=description,
-            status=status, priority=priority, due_date=due_date,
+            status=status, priority=priority,
+            start_date=start_date, due_date=due_date,
         )
 
     show_task_dialog(on_save=on_save, task=task)
+
+
+def _assign_task_to_project(task, project_id, refresh_all):
+    """Assign an inbox task to a project."""
+    app_state.assign_task_to_project(task.id, project_id)
 
 
 def _show_delete_task_dialog(task: Task, refresh_all):

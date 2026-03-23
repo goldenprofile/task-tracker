@@ -2,7 +2,7 @@
 
 from nicegui import ui
 
-from ..models import Project
+from ..models import Project, ViewMode
 from ..theme import Colors, get_project_color
 from ..state import app_state
 
@@ -16,8 +16,36 @@ def build_sidebar(
 ):
     """Build the sidebar with project list."""
     with ui.column().classes("sidebar p-0"):
+        # Navigation
+        with ui.column().classes("w-full px-1 pt-3 pb-0 gap-0"):
+            nav_items = [
+                (ViewMode.KANBAN, "view_kanban", "Board"),
+                (ViewMode.INBOX, "inbox", "Inbox"),
+                (ViewMode.GANTT, "view_timeline", "Timeline"),
+            ]
+            for view, icon, label in nav_items:
+                is_active = app_state.current_view == view
+                cls = "nav-item" + (" selected" if is_active else "")
+                with ui.element("div").classes(cls) as nav:
+                    def on_nav_click(v=view):
+                        app_state.switch_view(v)
+                    nav.on("click", on_nav_click)
+
+                    with ui.row().classes("w-full items-center no-wrap gap-2"):
+                        icon_color = Colors.ACCENT if is_active else Colors.TEXT_MUTED
+                        ui.icon(icon).style(f"color: {icon_color}; font-size: 18px")
+                        text_color = Colors.TEXT_PRIMARY if is_active else Colors.TEXT_SECONDARY
+                        ui.label(label).style(f"color: {text_color}; font-size: 13px; font-weight: 500")
+
+                        if view == ViewMode.INBOX:
+                            count = len(app_state.get_inbox_tasks())
+                            if count > 0:
+                                ui.label(str(count)).classes("column-count")
+
+        ui.element("div").classes("nav-divider")
+
         # Header
-        with ui.row().classes("w-full items-center px-4 pt-4 pb-2"):
+        with ui.row().classes("w-full items-center px-4 pt-2 pb-2"):
             ui.label("PROJECTS").style(
                 f"color: {Colors.TEXT_MUTED}; font-size: 11px; "
                 f"letter-spacing: 1.5px; font-weight: 600"

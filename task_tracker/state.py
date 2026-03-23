@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import selectinload
 
-from .models import Project, Task, TaskStatus, TaskPriority
+from .models import Project, Task, TaskStatus, TaskPriority, ViewMode
 from .database import db_manager
 
 
@@ -17,6 +17,9 @@ class AppState:
     projects: List[Project] = field(default_factory=list)
     current_project: Optional[Project] = None
     current_task: Optional[Task] = None
+
+    # View
+    current_view: ViewMode = ViewMode.KANBAN
 
     # Filters
     show_archived: bool = False
@@ -86,6 +89,52 @@ class AppState:
         tasks = self.get_filtered_tasks()
         return [t for t in tasks if t.status == status]
 
+    def switch_view(self, view: ViewMode) -> None:
+        """Switch the current view mode."""
+        self.current_view = view
+        self.notify_update()
+
+    def get_inbox_tasks(self) -> List[Task]:
+        """Get all tasks without a project (inbox)."""
+        session = db_manager.get_session()
+        try:
+            return session.query(Task).filter(
+                Task.project_id == None  # noqa: E711
+            ).order_by(Task.created_at.desc()).all()
+        finally:
+            session.close()
+
+    def create_inbox_task(self, title: str, priority: TaskPriority = TaskPriority.MEDIUM) -> Task:
+        """Quick-create a task in the inbox (no project)."""
+        session = db_manager.get_session()
+        try:
+            task = Task(project_id=None, title=title, priority=priority)
+            session.add(task)
+            session.commit()
+            session.refresh(task)
+            self.notify_update()
+            return task
+        finally:
+            session.close()
+
+    def assign_task_to_project(self, task_id: int, project_id: int) -> None:
+        """Move an inbox task to a project."""
+        self.update_task(task_id, project_id=project_id)
+
+    def get_gantt_tasks(self) -> List[Task]:
+        """Get tasks suitable for Gantt display (those with date info)."""
+        session = db_manager.get_session()
+        try:
+            query = session.query(Task)
+            if self.current_project:
+                query = query.filter(Task.project_id == self.current_project.id)
+            query = query.filter(
+                (Task.start_date != None) | (Task.due_date != None)  # noqa: E711
+            )
+            return query.order_by(Task.start_date, Task.due_date).all()
+        finally:
+            session.close()
+
     def select_project(self, project: Optional[Project]) -> None:
         """Select a project."""
         self.current_project = project
@@ -150,9 +199,10 @@ class AppState:
         finally:
             session.close()
 
-    def create_task(self, project_id: int, title: str, description: str = "",
+    def create_task(self, title: str, description: str = "",
                     priority: TaskPriority = TaskPriority.MEDIUM,
-                    due_date=None) -> Task:
+                    due_date=None, start_date=None,
+                    project_id: Optional[int] = None) -> Task:
         """Create a new task."""
         session = db_manager.get_session()
         try:
@@ -161,7 +211,8 @@ class AppState:
                 title=title,
                 description=description,
                 priority=priority,
-                due_date=due_date
+                start_date=start_date,
+                due_date=due_date,
             )
             session.add(task)
             session.commit()
